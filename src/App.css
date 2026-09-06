@@ -19,7 +19,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
 
-  /* BACKGROUND IMAGE PLACEHOLDER
+  /* BACKGROUND IMAGE PLACEHOLDER/
      Put your image at: public/background.jpg
      Then this CSS will use it automatically. */
   background-image:
