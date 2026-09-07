@@ -175,7 +175,7 @@ function App() {
       if (NTFY_TOPIC !== 'YOUR_NTFY_TOPIC_HERE') {
         const isComplaint = type === 'complaint'
 
-        const notificationResponse = await fetch('https://ntfy.sh', {
+        const notificationResponse = await fetch('https://ntfy.sh/', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -193,7 +193,12 @@ function App() {
 
         if (!notificationResponse.ok) {
           notificationWorked = false
-          console.error('ntfy returned', notificationResponse.status)
+          const ntfyErrorText = await notificationResponse.text()
+          console.error(
+            'ntfy failed:',
+            notificationResponse.status,
+            ntfyErrorText,
+          )
         }
       } else {
         notificationWorked = false
