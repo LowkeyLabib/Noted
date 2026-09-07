@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
+// NTFY PLACEHOLDER: replace this with the exact topic that worked on your phone.
+const NTFY_TOPIC = 'noted-labib-7x29-k4m8-p91q'
+
 function App() {
   const [user, setUser] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
@@ -164,11 +167,48 @@ function App() {
       return
     }
 
+    // Send a phone notification through ntfy.
+    // The message is already safely stored in Supabase even if ntfy fails.
+    let notificationWorked = true
+
+    try {
+      if (NTFY_TOPIC !== 'YOUR_NTFY_TOPIC_HERE') {
+        const isComplaint = type === 'complaint'
+
+        const notificationResponse = await fetch('https://ntfy.sh', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            topic: NTFY_TOPIC,
+            title: 'Noted.',
+            message: isComplaint
+              ? `New complaint · Level ${level}\n${description.trim()}`
+              : `New praise\n${description.trim()}`,
+            priority: isComplaint && level >= 4 ? 4 : 3,
+            tags: isComplaint ? ['warning'] : ['heart'],
+          }),
+        })
+
+        if (!notificationResponse.ok) {
+          notificationWorked = false
+          console.error('ntfy returned', notificationResponse.status)
+        }
+      } else {
+        notificationWorked = false
+        console.warn('NTFY_TOPIC placeholder has not been replaced yet.')
+      }
+    } catch (notificationError) {
+      notificationWorked = false
+      console.error('Notification failed:', notificationError)
+    }
+
     setDescription('')
     setFiles([])
     setLevel(1)
     setType('praise')
-    setMessage('Sent.')
+    setMessage(notificationWorked ? 'Sent.' : 'Sent, but phone notification failed.')
     setSending(false)
     await loadMessages(true)
   }
