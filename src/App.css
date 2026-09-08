@@ -681,3 +681,20 @@ h2 {
     font-size: 13px;
   }
 }
+
+/* =========================
+   RESNA FIRST-TIME SETUP
+========================= */
+
+.setup-note {
+  margin: 0 0 12px;
+  text-align: center;
+  color: #756963;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.stacked-input {
+  margin-top: 10px;
+}
+

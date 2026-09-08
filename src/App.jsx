@@ -2,15 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import './App.css'
 
-// Cloudflare Worker placeholder.
-const NOTIFY_WORKER_URL = 'https://noted-notify.labibhasan731.workers.dev/'
+const LABIB_EMAIL = 'labib@noted.local'
+const RESNA_EMAIL = 'resna@noted.local'
 
 function App() {
   const [user, setUser] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [setupCode, setSetupCode] = useState('')
   const [loginError, setLoginError] = useState('')
   const [checkingSession, setCheckingSession] = useState(true)
+  const [checkingResnaSetup, setCheckingResnaSetup] = useState(false)
+  const [resnaNeedsSetup, setResnaNeedsSetup] = useState(false)
+  const [creatingResna, setCreatingResna] = useState(false)
 
   const [type, setType] = useState('praise')
   const [description, setDescription] = useState('')
@@ -23,29 +28,160 @@ function App() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [historyError, setHistoryError] = useState('')
 
+  const identifyUser = (session) => {
+    const email = session?.user?.email?.toLowerCase()
+    if (email === LABIB_EMAIL) return 'labib'
+    if (email === RESNA_EMAIL) return 'resna'
+    return null
+  }
+
   useEffect(() => {
     const checkLogin = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession()
 
-      if (session) {
-        setUser('labib')
-        setCheckingSession(false)
-        return
-      }
-
-      const savedUser = localStorage.getItem('noted_user')
-
-      if (savedUser === 'resna') {
-        setUser('resna')
-      }
-
+      setUser(identifyUser(session))
       setCheckingSession(false)
     }
 
     checkLogin()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(identifyUser(session))
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
+
+  const resetLoginFields = () => {
+    setPassword('')
+    setConfirmPassword('')
+    setSetupCode('')
+    setLoginError('')
+  }
+
+  const checkResnaSetup = async () => {
+    setCheckingResnaSetup(true)
+    setLoginError('')
+
+    try {
+      const { data, error } = await supabase.functions.invoke('resna-setup', {
+        method: 'GET',
+      })
+
+      if (error) throw error
+
+      setResnaNeedsSetup(!data?.setupComplete)
+    } catch (error) {
+      console.error(error)
+      setLoginError('Could not check Resna account setup.')
+    } finally {
+      setCheckingResnaSetup(false)
+    }
+  }
+
+  const chooseUser = async (nextUser) => {
+    setSelectedUser(nextUser)
+    resetLoginFields()
+
+    if (nextUser === 'resna') {
+      await checkResnaSetup()
+    } else {
+      setResnaNeedsSetup(false)
+    }
+  }
+
+  const login = async () => {
+    setLoginError('')
+
+    if (!password) {
+      setLoginError('Enter your password.')
+      return
+    }
+
+    const email = selectedUser === 'resna' ? RESNA_EMAIL : LABIB_EMAIL
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      console.error(error)
+      setLoginError('Wrong password.')
+      return
+    }
+
+    resetLoginFields()
+  }
+
+  const createResnaAccount = async () => {
+    setLoginError('')
+
+    if (!setupCode.trim()) {
+      setLoginError('Enter the one-time setup code.')
+      return
+    }
+
+    if (password.length < 6) {
+      setLoginError('Password must be at least 6 characters.')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setLoginError('Passwords do not match.')
+      return
+    }
+
+    setCreatingResna(true)
+
+    try {
+      const { data, error } = await supabase.functions.invoke('resna-setup', {
+        body: {
+          setupCode: setupCode.trim(),
+          password,
+        },
+      })
+
+      if (error) throw error
+
+      if (!data?.success) {
+        setLoginError(data?.error || 'Could not create account.')
+        return
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: RESNA_EMAIL,
+        password,
+      })
+
+      if (signInError) {
+        console.error(signInError)
+        setResnaNeedsSetup(false)
+        setLoginError('Password created. Enter it again to log in.')
+        return
+      }
+
+      setResnaNeedsSetup(false)
+      resetLoginFields()
+    } catch (error) {
+      console.error(error)
+      setLoginError('Could not create Resna account.')
+    } finally {
+      setCreatingResna(false)
+    }
+  }
+
+  const logout = async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+    setSelectedUser(null)
+    resetLoginFields()
+    setMessages([])
+  }
 
   const loadMessages = async (quiet = false) => {
     if (!quiet) setLoadingMessages(true)
@@ -53,7 +189,9 @@ function App() {
 
     const { data, error } = await supabase
       .from('messages')
-      .select('id, type, description, complaint_level, is_read, attachment_url, attachment_urls, created_at')
+      .select(
+        'id, type, description, complaint_level, is_read, attachment_url, attachment_urls, created_at',
+      )
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -71,53 +209,13 @@ function App() {
 
     loadMessages()
 
-      const timer = setInterval(() => loadMessages(true), 10000)
+    const timer = setInterval(() => loadMessages(true), 10000)
     return () => clearInterval(timer)
   }, [user])
 
-  const loginAsResna = () => {
-    localStorage.setItem('noted_user', 'resna')
-    setUser('resna')
-  }
-
-  const loginAsLabib = async () => {
-    setLoginError('')
-
-    if (!password) {
-      setLoginError('Enter your password.')
-      return
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: 'labib@noted.local',
-      password,
-    })
-
-    if (error) {
-      console.error(error)
-      setLoginError('Wrong password.')
-      return
-    }
-
-    localStorage.removeItem('noted_user')
-    setPassword('')
-    setUser('labib')
-  }
-
-  const logout = async () => {
-    if (user === 'labib') {
-      await supabase.auth.signOut()
-    }
-
-    localStorage.removeItem('noted_user')
-    setUser(null)
-    setSelectedUser(null)
-    setPassword('')
-    setLoginError('')
-    setMessages([])
-  }
-
   const submitMessage = async () => {
+    if (user !== 'resna') return
+
     if (!description.trim()) {
       setMessage('Write something first.')
       return
@@ -166,46 +264,11 @@ function App() {
       return
     }
 
-    // Send a phone notification through the Cloudflare Worker.
-    // The message is already stored in Supabase even if notification delivery fails.
-    let notificationWorked = true
-
-    try {
-      const isComplaint = type === 'complaint'
-
-      const notificationResponse = await fetch(NOTIFY_WORKER_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: isComplaint
-            ? `Noted. Complaint · Level ${level}`
-            : 'Noted. New praise ❤️',
-          message: description.trim(),
-          priority: isComplaint && level >= 4 ? 4 : 3,
-        }),
-      })
-
-      if (!notificationResponse.ok) {
-        notificationWorked = false
-        const errorText = await notificationResponse.text()
-        console.error(
-          'Notification worker failed:',
-          notificationResponse.status,
-          errorText,
-        )
-      }
-    } catch (notificationError) {
-      notificationWorked = false
-      console.error('Notification failed:', notificationError)
-    }
-
     setDescription('')
     setFiles([])
     setLevel(1)
     setType('praise')
-    setMessage(notificationWorked ? 'Sent.' : 'Sent, but phone notification failed.')
+    setMessage('Sent.')
     setSending(false)
     await loadMessages(true)
   }
@@ -281,31 +344,85 @@ function App() {
           <div className="login-choice">
             <button
               className={selectedUser === 'resna' ? 'person active-person' : 'person'}
-              onClick={() => {
-                setSelectedUser('resna')
-                setPassword('')
-                setLoginError('')
-              }}
+              onClick={() => chooseUser('resna')}
             >
               Resna
             </button>
 
             <button
               className={selectedUser === 'labib' ? 'person active-person' : 'person'}
-              onClick={() => {
-                setSelectedUser('labib')
-                setPassword('')
-                setLoginError('')
-              }}
+              onClick={() => chooseUser('labib')}
             >
               Labib
             </button>
           </div>
 
-          {selectedUser === 'resna' && (
-            <button className="send-button" onClick={loginAsResna}>
-              Enter
-            </button>
+          {selectedUser === 'resna' && checkingResnaSetup && (
+            <p className="status">Checking account…</p>
+          )}
+
+          {selectedUser === 'resna' && !checkingResnaSetup && (
+            <div className="password-area">
+              {resnaNeedsSetup ? (
+                <>
+                  <p className="setup-note">
+                    First time only — create your password.
+                  </p>
+
+                  <input
+                    className="password-input"
+                    type="password"
+                    placeholder="One-time setup code"
+                    value={setupCode}
+                    onChange={(e) => setSetupCode(e.target.value)}
+                  />
+
+                  <input
+                    className="password-input stacked-input"
+                    type="password"
+                    placeholder="Create password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+
+                  <input
+                    className="password-input stacked-input"
+                    type="password"
+                    placeholder="Confirm password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') createResnaAccount()
+                    }}
+                  />
+
+                  <button
+                    className="send-button"
+                    onClick={createResnaAccount}
+                    disabled={creatingResna}
+                  >
+                    {creatingResna ? 'Creating…' : 'Create password'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    className="password-input"
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') login()
+                    }}
+                  />
+
+                  <button className="send-button" onClick={login}>
+                    Enter
+                  </button>
+                </>
+              )}
+            </div>
           )}
 
           {selectedUser === 'labib' && (
@@ -317,11 +434,11 @@ function App() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') loginAsLabib()
+                  if (e.key === 'Enter') login()
                 }}
               />
 
-              <button className="send-button" onClick={loginAsLabib}>
+              <button className="send-button" onClick={login}>
                 Enter
               </button>
             </div>
@@ -416,9 +533,7 @@ function App() {
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={(e) => {
-                  setFiles(Array.from(e.target.files || []))
-                }}
+                onChange={(e) => setFiles(Array.from(e.target.files || []))}
               />
             </label>
 
@@ -431,7 +546,9 @@ function App() {
                       type="button"
                       className="remove-file-button"
                       onClick={() =>
-                        setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))
+                        setFiles((current) =>
+                          current.filter((_, fileIndex) => fileIndex !== index),
+                        )
                       }
                       aria-label={`Remove ${selectedFile.name}`}
                     >
@@ -457,7 +574,11 @@ function App() {
               <h2>History</h2>
             </div>
 
-            <button className="refresh-button" onClick={() => loadMessages()} disabled={loadingMessages}>
+            <button
+              className="refresh-button"
+              onClick={() => loadMessages()}
+              disabled={loadingMessages}
+            >
               {loadingMessages ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
@@ -471,7 +592,11 @@ function App() {
           <div className="history-list">
             {messages.map((item) => (
               <article
-                className={`history-item ${item.type === 'complaint' ? `complaint-item level-${item.complaint_level}` : 'praise-item'}`}
+                className={`history-item ${
+                  item.type === 'complaint'
+                    ? `complaint-item level-${item.complaint_level}`
+                    : 'praise-item'
+                }`}
                 key={item.id}
               >
                 <div className="history-item-top">
