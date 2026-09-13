@@ -343,87 +343,12 @@ function App() {
 
           <div className="login-choice">
             <button
-              className={selectedUser === 'resna' ? 'person active-person' : 'person'}
-              onClick={() => chooseUser('resna')}
-            >
-              Resna
-            </button>
-
-            <button
               className={selectedUser === 'labib' ? 'person active-person' : 'person'}
               onClick={() => chooseUser('labib')}
             >
               Labib
             </button>
           </div>
-
-          {selectedUser === 'resna' && checkingResnaSetup && (
-            <p className="status">Checking account…</p>
-          )}
-
-          {selectedUser === 'resna' && !checkingResnaSetup && (
-            <div className="password-area">
-              {resnaNeedsSetup ? (
-                <>
-                  <p className="setup-note">
-                    First time only — create your password.
-                  </p>
-
-                  <input
-                    className="password-input"
-                    type="password"
-                    placeholder="One-time setup code"
-                    value={setupCode}
-                    onChange={(e) => setSetupCode(e.target.value)}
-                  />
-
-                  <input
-                    className="password-input stacked-input"
-                    type="password"
-                    placeholder="Create password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-
-                  <input
-                    className="password-input stacked-input"
-                    type="password"
-                    placeholder="Confirm password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') createResnaAccount()
-                    }}
-                  />
-
-                  <button
-                    className="send-button"
-                    onClick={createResnaAccount}
-                    disabled={creatingResna}
-                  >
-                    {creatingResna ? 'Creating…' : 'Create password'}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <input
-                    className="password-input"
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') login()
-                    }}
-                  />
-
-                  <button className="send-button" onClick={login}>
-                    Enter
-                  </button>
-                </>
-              )}
-            </div>
-          )}
 
           {selectedUser === 'labib' && (
             <div className="password-area">
