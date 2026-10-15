@@ -5,6 +5,32 @@ import './App.css'
 const LABIB_EMAIL = 'labib@noted.local'
 const RESNA_EMAIL = 'resna@noted.local'
 
+function Heart({ className = '' }) {
+  return (
+    <svg className={`heart ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
+    </svg>
+  )
+}
+
+function PageHearts() {
+  return (
+    <div className="page-hearts" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, index) => <Heart key={index} />)}
+    </div>
+  )
+}
+
+function Brand() {
+  return (
+    <div className="brand">
+      <div className="brand-seal"><Heart /></div>
+      <h1>Noted.</h1>
+      <div className="brand-flourish" aria-hidden="true"><span /><Heart /><span /></div>
+    </div>
+  )
+}
+
 function App() {
   const [user, setUser] = useState(null)
   const [selectedUser, setSelectedUser] = useState(null)
@@ -327,8 +353,9 @@ function App() {
   if (checkingSession) {
     return (
       <div className="page">
+        <PageHearts />
         <div className="card loading-card">
-          <h1>Noted.</h1>
+          <Brand />
         </div>
       </div>
     )
@@ -337,8 +364,9 @@ function App() {
   if (!user) {
     return (
       <div className="page">
+        <PageHearts />
         <div className="card login-card">
-          <h1>Noted.</h1>
+          <Brand />
           <p className="subtitle">Who are you?</p>
 
           <div className="login-choice">
@@ -346,6 +374,7 @@ function App() {
               className={selectedUser === 'resna' ? 'person active-person' : 'person'}
               onClick={() => chooseUser('resna')}
             >
+              <Heart />
               Resna
             </button>
 
@@ -353,6 +382,7 @@ function App() {
               className={selectedUser === 'labib' ? 'person active-person' : 'person'}
               onClick={() => chooseUser('labib')}
             >
+              <Heart />
               Labib
             </button>
           </div>
@@ -452,6 +482,7 @@ function App() {
 
   return (
     <div className="page">
+      <PageHearts />
       <main className="card main-card">
         <div className="top-bar">
           <span className="logged-in">{user === 'resna' ? 'Resna' : 'Labib'}</span>
@@ -460,7 +491,7 @@ function App() {
           </button>
         </div>
 
-        <h1>Noted.</h1>
+        <Brand />
         <p className="subtitle">
           {user === 'resna'
             ? 'Leave something worth remembering.'
@@ -469,11 +500,13 @@ function App() {
 
         <div className="stats">
           <div className="stat praise-stat">
+            <Heart className="stat-heart" />
             <span className="stat-number">{monthCounts.praise}</span>
             <span className="stat-label">Praise this month</span>
           </div>
 
           <div className="stat complaint-stat">
+            <Heart className="stat-heart" />
             <span className="stat-number">{monthCounts.complaint}</span>
             <span className="stat-label">Complaints this month</span>
           </div>
